@@ -61,7 +61,7 @@ COPY hestiacp /tmp/hestiacp
 ###
 FROM hestiacp-$HESTIACP_SOURCE AS hestiacp-installed
 
-ARG HESTIACP_REPOSITORY=https://github.com/techriffic/hcp-1.7.7-hammad-new.git
+ARG HESTIACP_REPOSITORY=https://github.com/hammadsohail/hestiacp-repo-1.7.7-docker.git
 ARG HESTIACP_BRANCH
 
 ARG MULTIPHP_VERSIONS
