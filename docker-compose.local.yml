@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+
+  hestiacp:
+    image: "${HESTIACP_IMAGE:?}"
+    restart: "no"
+    environment:
+      DEV_MODE: "yes"
+    volumes:
+      - ./data/backup:/backup
+      - ./data/conf:/conf
+      - ./data/home:/home
+      - ./rootfs/usr/local/hstc/bin:/usr/local/hstc/bin
+      - ./rootfs/usr/local/hstc/func:/usr/local/hstc/func
+      - ./rootfs/usr/local/hstc/updates:/usr/local/hstc/updates
+
+  mariadb:
+    restart: "no"
+    volumes:
+      - ./data/mariadb:/var/lib/mysql

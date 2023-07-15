@@ -1,0 +1,94 @@
+ARG HESTIACP_SOURCE=base
+ARG ZLIB_VERSION=1.2.13
+
+FROM debian:bullseye AS hestiacp-base
+
+LABEL maintainer="João Henrique <joao_henriquee@outlook.com>"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1 \
+    RUN_IN_CONTAINER=1
+
+FROM debian:bullseye
+
+# Update package lists and install necessary packages
+RUN apt-get -y update \
+    && apt-get -y upgrade \
+    && apt-get -y install --no-install-recommends liblwp-protocol-https-perl wget curl locales zip unzip \
+        sudo apt-utils build-essential libpam-pwdfile libwww-perl rsyslog software-properties-common \
+        iptables iproute2 dnsutils iputils-ping net-tools strace lsof dsniff runit-systemd cron rsync file \
+        jq acl openssl openvpn vim htop dirmngr gnupg zlib1g-dev lsb-release apt-transport-https \
+        ca-certificates perl libperl-dev libgd3 libgd-dev libgeoip1 libgeoip-dev geoip-bin libxml2 libxml2-dev \
+        libxslt1.1 libxslt1-dev libxslt-dev lftp libmaxminddb0 libmaxminddb-dev mmdb-bin python3 python3-pip \
+        python3-isync gawk socat nmap
+
+RUN apt-get -y install git \
+    && test -L /sbin/chkconfig || ln -sf /usr/sbin/sysv-rc-conf /sbin/chkconfig \
+    && test -L /sbin/nologin || ln -sf /usr/sbin/nologin /sbin/nologin \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set the locale to en_US.UTF-8
+RUN sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen en_US.UTF-8 \
+    && dpkg-reconfigure locales \
+    && update-locale LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8 LC_ALL=en_US.UTF-8 LC_CTYPE=en_US.UTF-8
+
+# Get systemctl script from docker systemctl replacement to avoid problems with systemd in docker
+# https://github.com/gdraheim/docker-systemctl-replacement
+RUN dsr_tag="v1.5.7106"; \
+    wget https://raw.githubusercontent.com/gdraheim/docker-systemctl-replacement/${dsr_tag}/files/docker/systemctl3.py -O /usr/bin/systemctl \
+    && chmod +x /usr/bin/systemctl \
+    && test -L /bin/systemctl || ln -sf /usr/bin/systemctl /bin/systemctl \
+    && wget https://raw.githubusercontent.com/gdraheim/docker-systemctl-replacement/${dsr_tag}/files/docker/journalctl3.py -O /usr/bin/journalctl \
+    && chmod +x /usr/bin/journalctl \
+    && test -L /bin/journalctl || ln -sf /usr/bin/journalctl /bin/journalctl
+
+###
+## Use local Hestia repository to build image
+###
+# Note: This process can increase the final image size and is only recommended during development.
+# For production images, give preference to installation by cloning from the repository.
+FROM hestiacp-base AS hestiacp-local
+
+COPY hestiacp /tmp/hestiacp
+
+RUN rm -rf /tmp/hestiacp
+
+###
+## Install and configure Hestia
+##
+## * Clone the repository and perform a checkout for the chosen version tag;
+## * Create an installer for Docker, making the necessary changes to run the installation;
+## * Copy the installer and required files to the image;
+## * Compile Hestia packages;
+## * Clean up unnecessary files and directories.
+###
+FROM hestiacp-$HESTIACP_SOURCE AS hestiacp-installed
+
+ARG HESTIACP_REPOSITORY=https://github.com/hestiacp/hestiacp.git
+ARG HESTIACP_BRANCH
+
+COPY rootfs/usr/local/hstc/install/generate-docker-installer.sh /tmp/generate-docker-installer.sh
+
+# Copy the local HestiaCP repository to the image
+COPY hestiacp /tmp/hestiacp
+
+# Apply changes to the installer
+RUN bash /tmp/generate-docker-installer.sh /tmp/hestiacp && \
+    ls -la /tmp/hestiacp/install/deb/ && \
+    if [ -n "$ZLIB_VERSION" ]; then \
+        echo "ZLIB_VERSION=\"$ZLIB_VERSION\"" > /tmp/hestiacp/install/deb/zlib; \
+    fi
+
+# Compile Hestia Packages
+RUN cd /tmp/hestiacp/src && \
+    bash ./hst_autocompile.sh --all --noinstall --keepbuild '~localsrc' && \
+    mkdir -p /root/hestiacp/build && \
+    if [ -d /tmp/hestiacp/build ]; then \
+        mv /tmp/hestiacp/build /root/hestiacp/; \
+    fi
+
+# Clean up unnecessary files and directories
+RUN rm -rf /tmp/hestiacp
+
+CMD ["/sbin/init"]

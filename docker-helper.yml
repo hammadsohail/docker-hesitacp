@@ -1,0 +1,30 @@
+variables:
+  DOCKER_ENV: local
+  DOCKER_REPOSITORY: techriffic/maria_db_enabled
+  ZLIB_VERSION: 1.2.13
+images:
+  stable:
+    source_image: $DOCKER_REPOSITORY
+    branch: "tags/latest"
+    version: latest
+    split_versions: yes
+  beta:
+    source_image: $DOCKER_REPOSITORY:beta
+    branch: "tags/latest"
+    version: latest
+    split_versions: yes
+  experimental:
+    source_image: $DOCKER_REPOSITORY:experimental
+    branch: "beta/1.6.0"
+    version: latest
+    split_versions: yes
+  development:
+    source_image: $DOCKER_REPOSITORY:development
+    use_local_repo: yes
+    version: latest
+
+scripts:
+  dev: "docker-compose rm -sf && docker-compose up --force-recreate"
+  prod: "docker-compose up -d"
+  recreate: "docker-compose rm -sf && docker-compose up -d"
+  remove_all: "docker-compose rm -sf"
